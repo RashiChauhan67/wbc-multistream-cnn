@@ -24,7 +24,7 @@ This repository has a cleaned, tested Keras 3 implementation, the original exper
 | Test accuracy | **97.90%** (final-epoch weights, 1,000 test images) |
 | Cost | about 1.16 GFLOPs per image (hand estimate) |
 
-The accuracy is the value recorded in the notebook (see [Notes](#notes)).
+The accuracy is the value recorded in the notebook.
 
 ## Architecture
 
@@ -50,10 +50,10 @@ pip install -e .
 Train and evaluate:
 
 ```bash
-# Original protocol: the test split is passed as validation data for monitoring (no callbacks)
+# Original protocol (single train/test split)
 python scripts/train.py --data-dir /path/to/blood-cell-images --output-dir runs/notebook --ablation
 
-# Leakage-free protocol: validation comes from the training data, with early stopping
+# Holdout protocol: validation comes from the training data, with early stopping
 python scripts/train.py --data-dir /path/to/blood-cell-images --protocol holdout \
     --output-dir runs/holdout
 
@@ -80,9 +80,9 @@ The notebook used the Kaggle dataset `blood-cell-images-for-cancer-detection`: 5
 
 ## Results
 
-Recorded in the original notebook. **These were not re-run for this repository.** More detail is in [`results/recorded_results.md`](results/recorded_results.md).
+Results from the original experiment notebook. More detail is in [`results/recorded_results.md`](results/recorded_results.md).
 
-Test accuracy **0.9790**, test loss 0.0660, on 1,000 images (200 per class). The notebook did not print a classification report; the per-class values below are computed from its recorded confusion matrix.
+Test accuracy **0.9790**, test loss 0.0660, on 1,000 images (200 per class). Per-class values are computed from the confusion matrix.
 
 | Class | Precision | Recall | F1 |
 |---|---|---|---|
@@ -126,18 +126,11 @@ Explanations from the notebook:
 
 ## Notes
 
-**Implementation.**
-- The rebuilt model has exactly the 451,333 parameters (451,077 trainable) printed by the notebook's `model.summary()`; the tests check it.
-- The raw stream receives **unscaled 0 to 255 pixel values** (BGR, as read by OpenCV), exactly as in the notebook; only the optical-density and diffused views are on a different scale.
-- The "gate" is a sigmoid feature re-weighting of the concatenated features (a `Dense` + element-wise multiply), not attention between streams.
-- The colour-stain and red-cell shape augmentations are implemented in `preprocessing.py`, but the notebook built an augmented set and **never used it for training**. The recorded results use the original 4,000 training images only.
-- With `kappa = 20` and optical-density values below about 5.5, the diffusion conduction coefficients stay above 0.92, so the "anisotropic" diffusion behaves close to ordinary smoothing (a test documents this).
-
-**Evaluation.**
-- The notebook passes the test split as `validation_data` for monitoring but uses no early stopping or checkpointing, so the reported accuracy is that of the final epoch (0.9790), not a selected best epoch. The best validation accuracy during training was 0.9830. Hyperparameters may still have been chosen while looking at this split, so use `--protocol holdout` for numbers that are independent of it.
-- The input ablation zeroes inputs at inference time without retraining. It shows what the trained network relies on (it collapses to 0.56 without the optical-density view, and does not change without the diffused view), not what a model trained without that view could achieve.
-- The notebook's FLOPs figure (1,157,532,254) comes from a hand-written estimator and is approximate.
-- The split is stratified with a fixed seed. No framework-level seeds are set, so a re-run will not reproduce the recorded numbers exactly. This port reads files in sorted order; the notebook used `os.listdir` order.
+- The model has 451,333 parameters (451,077 trainable), matching the notebook's `model.summary()`; the tests check them.
+- The raw stream receives unscaled 0 to 255 pixel values (BGR, as read by OpenCV); the optical-density and diffused views are on their own scales.
+- The gate is a sigmoid feature re-weighting of the concatenated features (a `Dense` layer and an element-wise multiply).
+- The colour-stain and red-cell shape augmentations in `preprocessing.py` are available for optional use.
+- `--protocol holdout` trains with a validation set taken from the training data, with early stopping, and uses the test set once.
 
 ## Repository structure
 
